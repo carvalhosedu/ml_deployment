@@ -4,16 +4,28 @@ import util
 import matplotlib.pyplot as plt
 import pandas as pd
 import pickle
+import requests
+import json
 
 # Verificando senha dentro de secrets para dar continuidade a execução do app
 if not util.check_password():
     st.stop()
 
+API_URL = "http://127.0.0.1:8000"
+
 # carregando dados do csv
-dados = data_handler.load_data()
+# dados = data_handler.load_data()
+dados = None
+response = requests.get(f"{API_URL}/get_titanic_data")
+if response.status_code == 200:
+    dados_json = json.loads(response.json())
+    dados = pd.DataFrame(dados_json)
+else:
+    print("Erro no request do get_titanic_data")
+
 
 # carregando modelo de predição
-model = pickle.load(open('./models/model.pkl', 'rb'))
+# model = pickle.load(open('./models/model.pkl', 'rb'))
 
 data_analyses_on = st.toggle('Mostrar gráficos')
 
@@ -74,41 +86,52 @@ with col2:
     submit = st.button('Verificar')
 
 # mapeando os valores de classe dos passageiros
-p_class_map = {
-    '1st': 1,
-    '2nd': 2,
-    '3rd': 3
-}
-sex_map = {
-    'Male': 0,
-    'Female': 1
-}
-embarked_map = {
-    'Cherbourg': 1,
-    'Queenstown': 2,
-    'Southampton': 3
-}
+# p_class_map = {
+#     '1st': 1,
+#     '2nd': 2,
+#     '3rd': 3
+# }
+# sex_map = {
+#     'Male': 0,
+#     'Female': 1
+# }
+# embarked_map = {
+#     'Cherbourg': 1,
+#     'Queenstown': 2,
+#     'Southampton': 3
+# }
 
 if submit or 'survived' in st.session_state:
     passageiro = {
-        'Pclass': p_class_map[p_class],
-        'Sex': sex_map[sex],
+        'Pclass': p_class,
+        'Sex': sex,
         'Age': age,
         'SibSp': sib_sp,
         'Parch': par_ch,
         'Fare': fare,
-        'Embarked': embarked_map[embarked]
+        'Embarked': embarked
     }
 
     # st.write(passageiro)
 
-    values = pd.DataFrame([passageiro])
+    # values = pd.DataFrame([passageiro])
     # st.dataframe(values)
 
-    results = model.predict(values)
+    # results = model.predict(values)
 
-    if len(results) == 1:
-        survided = int(results[0])
+    passageiro_json = json.dumps(passageiro)
+
+    response = requests.post(f"{API_URL}/predict", json=passageiro_json)
+
+    result = None
+
+    if response.status_code == 200:
+        result = response.json()
+    else:
+        print("Erro no request do predict")
+
+    if result is not None:
+        survided = int(result)
 
         if survided == 1:
             st.subheader('Passageiro Sobreviveu')
@@ -146,7 +169,15 @@ if submit or 'survived' in st.session_state:
 
             st.write(message)
 
-            data_handler.save_prediction(passageiro)
+            # data_handler.save_prediction(passageiro)
+            passageiro_json = json.dumps(passageiro)
+
+            response = requests.post(f"{API_URL}/save_prediction", json=passageiro_json)
+
+            if response.status_code == 200:
+                print("Predicao salvo com sucesso")
+            else:
+                print("Erro no request do save_prediction")
 
         col1, col2, col3 = st.columns(3)
 
@@ -161,7 +192,14 @@ accuracy_predictions_on = st.toggle('Exibir acurácia')
 
 if accuracy_predictions_on:
     # pega todas as predições salvas no JSON
-    predictions = data_handler.get_all_predictions()
+    # predictions = data_handler.get_all_predictions()
+    predicions = None
+    response = requests.get(f"{API_URL}/get_all_predictions")
+    if response.status_code == 200:
+        predictions = response.json()
+    else:
+        print("Erro no request do get_all_predictions")
+
     # salva o número total de predições realizadas
     num_total_predictions = len(predictions)
 
